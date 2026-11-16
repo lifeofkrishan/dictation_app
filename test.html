@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dictation accuracy test</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; img-src 'self' data:; style-src 'self'; media-src 'self' blob:; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15161a" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="doc">
+  <header class="top">
+    <h1>Accuracy test</h1>
+    <a class="pill" href="./">Back to dictation</a>
+  </header>
+
+  <main class="doc-main">
+    <section class="card">
+      <h2>What this does</h2>
+      <p>You read 20 sentences aloud, once. Both speech models then transcribe those same recordings, and the page counts how many words each got wrong and how long each took.</p>
+      <p>Allow about 10 minutes, on Wi-Fi: Whisper small is a 410 MB download. Close other tabs first. Recordings stay on this phone.</p>
+      <p id="crashNotice" class="notice" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>1. Read the sentences</h2>
+      <p id="recordProgress" class="small-print"></p>
+      <p id="sentence" class="sentence"></p>
+      <div class="row">
+        <button id="record" class="primary" type="button">Record</button>
+        <button id="play" type="button">Play</button>
+        <button id="prev" type="button" aria-label="Previous sentence">Back</button>
+        <button id="next" type="button" aria-label="Next sentence">Skip</button>
+      </div>
+      <p id="recordNote" class="note" role="status" aria-live="polite"></p>
+      <details>
+        <summary>Change the sentences (add your own jargon)</summary>
+        <p class="small-print">One sentence per line. Replace the last four with sentences that use the names and technical words you really say. Avoid digits and symbols: write words exactly as you would say them.</p>
+        <textarea id="sentenceEditor" class="dictionary" rows="12" spellcheck="false"></textarea>
+        <div class="row">
+          <button id="saveSentences" type="button">Save sentences</button>
+          <button id="resetSentences" type="button">Restore the original 20</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>2. Run the comparison</h2>
+      <label class="check"><input id="runBase" type="checkbox" checked> Whisper base (206 MB)</label>
+      <label class="check"><input id="runSmall" type="checkbox" checked> Whisper small (410 MB)</label>
+      <div class="row">
+        <button id="run" class="primary" type="button">Run test</button>
+        <button id="eraseAll" class="danger" type="button">Erase recordings and results</button>
+      </div>
+      <div id="runProgress" class="progress flush" hidden>
+        <div class="progress-track"><div id="runFill" class="progress-fill"></div></div>
+      </div>
+      <p id="runNote" class="note" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card">
+      <h2>3. Results</h2>
+      <div id="results"><p class="small-print">Nothing yet.</p></div>
+      <div class="row">
+        <button id="copyResults" type="button">Copy results</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/version.js"></script>
+  <script type="module" src="js/accuracy-test.js"></script>
+</body>
+</html>

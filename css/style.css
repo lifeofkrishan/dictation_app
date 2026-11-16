@@ -97,6 +97,7 @@ main {
   border-radius: 16px;
   padding: 16px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* never let wide content push the card past the screen edge */
   gap: 10px;
 }
 .card h2 { font-size: 18px; }
@@ -228,7 +229,7 @@ body[data-phase="busy"] .glyph.spinner {
 }
 .sheet-head h2 { font-size: 20px; }
 .sheet-body { padding: 4px 16px calc(24px + env(safe-area-inset-bottom)); }
-.sheet section { padding: 16px 0; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+.sheet section { padding: 16px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .sheet section:last-child { border-bottom: 0; }
 .sheet h3 { font-size: 16px; }
 .small-print { font-size: 14px; color: var(--muted); }
@@ -275,4 +276,31 @@ select {
   font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ---------- accuracy test page ---------- */
+body.doc { height: auto; min-height: 100dvh; display: block; padding-bottom: env(safe-area-inset-bottom); }
+.doc-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 10px 16px 32px; max-width: 720px; margin: 0 auto; }
+a.pill { text-decoration: none; color: var(--accent); }
+.sentence { font-size: 22px; line-height: 1.35; color: var(--text) !important; font-weight: 600; min-height: 60px; }
+.notice { color: var(--warn) !important; font-weight: 600; }
+.progress.flush { padding: 0; }
+details summary { cursor: pointer; font-size: 15px; color: var(--accent); padding: 6px 0; }
+details > * + * { margin-top: 10px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.verdict { font-weight: 600; color: var(--text) !important; }
+.per-sentence { display: grid; gap: 12px; margin-top: 8px; }
+.per-sentence div { font-size: 14px; border-left: 3px solid var(--line); padding-left: 10px; }
+.per-sentence b { font-weight: 600; }
+.per-sentence .miss { color: var(--record); }
+.button-link {
+  display: inline-grid; place-items: center;
+  min-height: 44px; padding: 0 16px;
+  border-radius: 12px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--accent);
+  font-weight: 600; text-decoration: none; justify-self: start;
 }
