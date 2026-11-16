@@ -8,7 +8,7 @@
 
 import { Mic } from './recorder.js';
 import { Engine } from './engine.js';
-import { MODELS } from './models.js';
+import { MODELS, pickEngine } from './models.js';
 import { cleanTranscript, parseDictionary } from './cleanup.js';
 import { wordErrors, totalWordErrors } from './wer.js';
 import { DEFAULT_SENTENCES, recommend } from './test-script.js';
@@ -83,6 +83,11 @@ const dictionaryText = (() => {
 })();
 const dictionary = parseDictionary(dictionaryText);
 
+// Use the same engine the app itself uses on this device.
+const engineChoice = pickEngine(['cpu', 'webgpu', 'auto'].includes(params.get('engine')) ? params.get('engine') : settings.engine || 'auto');
+const TESTABLE = ['tiny', 'base', 'small'];
+const sizeOf = (key) => MODELS[key][engineChoice].megabytes;
+
 const mic = new Mic({});
 mic.options.rawAudio = settings.rawAudio ?? true;
 mic.options.method = settings.captureMethod ?? 'auto';
@@ -121,8 +126,8 @@ const recordNote = (message, kind = '') => {
 };
 
 $('record').addEventListener('click', async () => {
-  mic.resumeAudio();
   if (mic.state !== 'recording') {
+    mic.unlock();
     try {
       recordNote('Starting microphone…');
       await mic.start();
@@ -222,8 +227,7 @@ async function testModel(key, indexes) {
     runNote(status.stage === 'warmup' ? `${label}: preparing…` : `${label}: loading ${Math.round((status.progress || 0) * 100)}%`);
   });
   try {
-    const options = {};
-    if (params.get('device')) options.device = params.get('device');
+    const options = { engine: engineChoice };
     if (params.get('encoder')) options.encoder = params.get('encoder');
     const facts = await engine.load(key, options);
     const rows = [];
@@ -266,7 +270,7 @@ async function testModel(key, indexes) {
 }
 
 $('run').addEventListener('click', async () => {
-  const chosen = [$('runBase').checked && 'base', $('runSmall').checked && 'small'].filter(Boolean);
+  const chosen = TESTABLE.filter((key) => $('run-' + key).checked);
   const indexes = sentences.map((_, i) => i).filter(isRecorded);
   if (!chosen.length || !indexes.length) return;
   busy = true;
@@ -315,7 +319,7 @@ function make(tag, text, className) {
 function renderResults() {
   const box = $('results');
   box.textContent = '';
-  const keys = ['base', 'small'].filter((key) => results[key]);
+  const keys = TESTABLE.filter((key) => results[key]);
   if (!keys.length) {
     box.append(make('p', 'Nothing yet.', 'small-print'));
     return;
@@ -333,7 +337,7 @@ function renderResults() {
     const row = make('tr');
     row.append(make('td', MODELS[key].label));
     if (r.status === 'done') {
-      row.append(make('td', `${r.clean.errors} / ${r.clean.words}`, 'num'), make('td', pct(r.clean.rate), 'num'), make('td', r.speed.toFixed(1) + 'x', 'num'), make('td', (r.loadMs / 1000).toFixed(1) + ' s', 'num'), make('td', r.device === 'webgpu' ? 'WebGPU' : 'WASM'));
+      row.append(make('td', `${r.clean.errors} / ${r.clean.words}`, 'num'), make('td', pct(r.clean.rate), 'num'), make('td', r.speed.toFixed(1) + 'x', 'num'), make('td', (r.loadMs / 1000).toFixed(1) + ' s', 'num'), make('td', r.device === 'webgpu' ? 'WebGPU' : 'Processor'));
     } else {
       const cell = make('td', r.status === 'crashed' ? `Page restarted while ${r.stage} (probably out of memory)` : `Failed: ${r.error}`, 'miss');
       cell.colSpan = 5;
@@ -371,7 +375,7 @@ function renderResults() {
 
 async function environmentSummary() {
   const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
-  return { appVersion: self.APP_VERSION, openedAs: standalone ? 'Home Screen app' : 'browser tab', browser: navigator.userAgent, dictionaryEntries: dictionary.length, rawAudio: mic.options.rawAudio, captureMethod: mic.options.method };
+  return { appVersion: self.APP_VERSION, engine: engineChoice, openedAs: standalone ? 'Home Screen app' : 'browser tab', browser: navigator.userAgent, dictionaryEntries: dictionary.length, rawAudio: mic.options.rawAudio, captureMethod: mic.options.method };
 }
 $('copyResults').addEventListener('click', async () => {
   const compact = {};
@@ -389,6 +393,8 @@ $('copyResults').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------- start
+for (const key of TESTABLE) $('size-' + key).textContent = `${MODELS[key].label} (${sizeOf(key)} MB download)`;
+$('introSizes').textContent = `Whisper small is a ${sizeOf('small')} MB download, so Wi-Fi is best.`;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && mic.state !== 'recording') mic.disarm();
 });

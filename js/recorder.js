@@ -69,6 +69,7 @@ export class Mic {
         video: false,
       });
     } catch (error) {
+      this._closeGraph();
       this._set('off');
       throw error;
     }
@@ -107,7 +108,8 @@ export class Mic {
   async _buildGraph(stream) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass || !window.AudioWorkletNode) throw new Error('AudioWorklet is not supported');
-    const ctx = new AudioContextClass({ latencyHint: 'interactive' });
+    // Normally unlock() has already made the context, inside the tap.
+    const ctx = this.ctx && this.ctx.state !== 'closed' ? this.ctx : new AudioContextClass({ latencyHint: 'interactive' });
     this.ctx = ctx;
     await ctx.audioWorklet.addModule(new URL('./pcm-worklet.js', import.meta.url));
     const source = ctx.createMediaStreamSource(stream);
@@ -133,6 +135,22 @@ export class Mic {
     // Browsers only start an AudioContext after the user has touched the
     // page. Try now, but do not wait forever if it refuses.
     await Promise.race([ctx.resume().catch(() => {}), sleep(300)]);
+  }
+
+  /**
+   * Call this directly inside the tap that starts a recording. Browsers only
+   * allow audio processing to start as the direct result of a tap, and the
+   * steps that follow (asking for the microphone) take too long to count.
+   */
+  unlock() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass || this.options.method === 'recorder') return;
+    try {
+      if (!this.ctx || this.ctx.state === 'closed') this.ctx = new AudioContextClass({ latencyHint: 'interactive' });
+      if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
+    } catch {
+      /* the recorder fallback will be used instead */
+    }
   }
 
   /** Call this from any tap/click: it un-pauses audio if the browser paused it. */

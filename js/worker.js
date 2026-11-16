@@ -11,28 +11,32 @@ import { MODELS } from './models.js';
 
 const post = (message) => self.postMessage(message);
 
-// ---- where the engine files live (inside this project, not on a CDN) ----
-function isSafariBelow26() {
-  const ua = navigator.userAgent;
-  const isSafari =
-    (navigator.vendor || '').includes('Apple') && !/CriOS|FxiOS|EdgiOS|OPiOS|mercury|brave/i.test(ua) && !ua.includes('Chrome') && !ua.includes('Android');
-  const match = ua.match(/Version\/(\d+)/);
-  return isSafari && match ? parseInt(match[1], 10) < 26 : false;
-}
-// Older Safari without WebGPU needs the plain build (same rule the library uses).
-const suffix = isSafariBelow26() && !('gpu' in navigator) ? '' : '.asyncify';
-const ORT = new URL('../vendor/ort/', import.meta.url).href;
-env.backends.onnx.wasm.wasmPaths = {
-  mjs: `${ORT}ort-wasm-simd-threaded${suffix}.mjs`,
-  wasm: `${ORT}ort-wasm-simd-threaded${suffix}.wasm`,
-};
-env.useWasmCache = false; // the service worker already keeps these files offline
+env.useWasmCache = false; // the service worker already keeps the engine files offline
 env.allowLocalModels = false;
 env.allowRemoteModels = true;
 env.useBrowserCache = true; // model files are stored on the device after the first download
 
+// There are two builds of the engine, and one worker only ever uses one:
+//
+//   cpu    -> the plain build. Smaller, and the one that is stable in Safari.
+//   webgpu -> the "asyncify" build, required to talk to the graphics chip.
+//             Safari on iOS 26 can run out of memory compiling this build
+//             and kill the page, which is why it is never used for "cpu".
+const BUILDS = {
+  cpu: { dir: '../vendor/ort/', suffix: '' },
+  webgpu: { dir: '../vendor/ort-webgpu/', suffix: '.asyncify' },
+};
+function useBuild(engine) {
+  const build = BUILDS[engine];
+  const base = new URL(build.dir, import.meta.url).href;
+  env.backends.onnx.wasm.wasmPaths = {
+    mjs: `${base}ort-wasm-simd-threaded${build.suffix}.mjs`,
+    wasm: `${base}ort-wasm-simd-threaded${build.suffix}.wasm`,
+  };
+  return `ort-wasm-simd-threaded${build.suffix}.wasm`;
+}
+
 let transcriber = null;
-let loaded = null; // facts about what is loaded, for the diagnostics panel
 
 async function probeWebGPU() {
   if (!('gpu' in navigator)) return { ok: false, reason: 'this browser has no WebGPU' };
@@ -69,61 +73,39 @@ function progressReporter(expectedBytes) {
   };
 }
 
-async function load({ model, device: forced, encoder }) {
+async function load({ model, engine, encoder }) {
   const spec = MODELS[model];
   if (!spec) throw new Error(`Unknown model "${model}"`);
-  if (transcriber) {
-    await transcriber.dispose().catch(() => {});
-    transcriber = null;
-  }
+  if (transcriber) throw new Error('This worker already has a model; start a new worker instead.');
 
-  const gpu = forced === 'wasm' ? { ok: false, reason: 'switched off in settings' } : await probeWebGPU();
-  const attempts = [];
-  if (gpu.ok) {
-    const variant = spec.webgpuNoF16 && !gpu.f16 ? spec.webgpuNoF16 : spec.webgpu;
-    const dtype = { ...variant.dtype };
-    if (encoder === 'fp32' || encoder === 'fp16') dtype.encoder_model = encoder;
-    attempts.push({ device: 'webgpu', dtype, megabytes: variant.megabytes });
+  let variant = spec.cpu;
+  let gpu = null;
+  if (engine === 'webgpu') {
+    gpu = await probeWebGPU();
+    if (!gpu.ok) throw new Error(`WebGPU cannot be used: ${gpu.reason}`);
+    variant = spec.webgpuNoF16 && !gpu.f16 ? spec.webgpuNoF16 : spec.webgpu;
   }
-  if (forced !== 'webgpu') attempts.push({ device: 'wasm', dtype: spec.wasm.dtype, megabytes: spec.wasm.megabytes });
+  const dtype = { ...variant.dtype };
+  if (engine === 'webgpu' && (encoder === 'fp32' || encoder === 'fp16')) dtype.encoder_model = encoder;
+  const build = useBuild(engine === 'webgpu' ? 'webgpu' : 'cpu');
+  const device = engine === 'webgpu' ? 'webgpu' : 'wasm';
 
-  const notes = [];
-  if (!gpu.ok) notes.push(`WebGPU not used: ${gpu.reason}`);
-
-  for (const attempt of attempts) {
-    try {
-      const t0 = performance.now();
-      post({ type: 'stage', stage: 'download', device: attempt.device, megabytes: attempt.megabytes });
-      transcriber = await pipeline('automatic-speech-recognition', spec.id, {
-        device: attempt.device,
-        dtype: attempt.dtype,
-        progress_callback: progressReporter(attempt.megabytes * 1e6),
-      });
-      const t1 = performance.now();
-      // First use is slow (the graphics chip has to prepare). Do that now on
-      // one second of silence so your first real dictation is fast.
-      post({ type: 'stage', stage: 'warmup', device: attempt.device });
-      if (attempt.device === 'webgpu') await transcriber(new Float32Array(16000), { max_new_tokens: 4 });
-      const t2 = performance.now();
-      loaded = {
-        model,
-        modelId: spec.id,
-        device: attempt.device,
-        dtype: attempt.dtype,
-        loadMs: Math.round(t1 - t0),
-        warmupMs: Math.round(t2 - t1),
-        gpu,
-        notes,
-      };
-      post({ type: 'ready', ...loaded });
-      return;
-    } catch (error) {
-      notes.push(`${attempt.device} failed: ${String(error?.message || error).slice(0, 300)}`);
-      if (transcriber) await transcriber.dispose().catch(() => {});
-      transcriber = null;
-    }
+  const t0 = performance.now();
+  post({ type: 'stage', stage: 'download', megabytes: variant.megabytes });
+  transcriber = await pipeline('automatic-speech-recognition', spec.id, {
+    device,
+    dtype,
+    progress_callback: progressReporter(variant.megabytes * 1e6),
+  });
+  const t1 = performance.now();
+  if (device === 'webgpu') {
+    // First use of the graphics chip is slow (it has to prepare). Do that now
+    // on one second of silence so your first real dictation is fast.
+    post({ type: 'stage', stage: 'warmup' });
+    await transcriber(new Float32Array(16000), { max_new_tokens: 4 });
   }
-  throw new Error(notes.join(' | ') || 'No way to run the model in this browser.');
+  const t2 = performance.now();
+  post({ type: 'ready', model, modelId: spec.id, engine, device, dtype, build, loadMs: Math.round(t1 - t0), warmupMs: Math.round(t2 - t1), gpu });
 }
 
 async function transcribe({ id, audio }) {
@@ -146,7 +128,7 @@ self.onmessage = (event) => {
       if (message.type === 'load') await load(message);
       else if (message.type === 'transcribe') await transcribe(message);
     } catch (error) {
-      post({ type: 'error', id: message.id ?? null, during: message.type, message: String(error?.message || error) });
+      post({ type: 'error', id: message.id ?? null, during: message.type, message: String(error?.message || error).slice(0, 500) });
     }
   });
 };

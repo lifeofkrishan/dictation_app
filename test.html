@@ -20,7 +20,7 @@
     <section class="card">
       <h2>What this does</h2>
       <p>You read 20 sentences aloud, once. Both speech models then transcribe those same recordings, and the page counts how many words each got wrong and how long each took.</p>
-      <p>Allow about 10 minutes, on Wi-Fi: Whisper small is a 410 MB download. Close other tabs first. Recordings stay on this phone.</p>
+      <p>Allow about 10 minutes. <span id="introSizes"></span> Close other tabs first. Recordings stay on this phone.</p>
       <p id="crashNotice" class="notice" hidden></p>
     </section>
 
@@ -48,8 +48,9 @@
 
     <section class="card">
       <h2>2. Run the comparison</h2>
-      <label class="check"><input id="runBase" type="checkbox" checked> Whisper base (206 MB)</label>
-      <label class="check"><input id="runSmall" type="checkbox" checked> Whisper small (410 MB)</label>
+      <label class="check"><input id="run-base" type="checkbox" checked> <span id="size-base">Whisper base</span></label>
+      <label class="check"><input id="run-small" type="checkbox" checked> <span id="size-small">Whisper small</span></label>
+      <label class="check"><input id="run-tiny" type="checkbox"> <span id="size-tiny">Whisper tiny</span></label>
       <div class="row">
         <button id="run" class="primary" type="button">Run test</button>
         <button id="eraseAll" class="danger" type="button">Erase recordings and results</button>

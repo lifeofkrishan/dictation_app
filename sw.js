@@ -2,7 +2,7 @@
 // It does two jobs.
 //
 // 1. OFFLINE. It keeps a copy of the app's own files on the device, so the
-//    app opens instantly and works with no internet.
+//    app works with no internet.
 //
 // 2. PRIVACY GUARD. Every network request the app makes passes through here.
 //    Only two kinds are let through:
@@ -13,8 +13,9 @@
 importScripts('js/version.js');
 
 const SHELL = `shell-${self.APP_VERSION}`;
+const NETWORK_WAIT_MS = 2500;
 
-// Small files that make up the app. Refreshed in the background on each visit.
+// Small files that make up the app.
 const APP_FILES = [
   './',
   'index.html',
@@ -30,6 +31,7 @@ const APP_FILES = [
   'js/engine.js',
   'js/worker.js',
   'js/models.js',
+  'js/guard.js',
   'js/cleanup.js',
   'js/wer.js',
   'manifest.webmanifest',
@@ -37,11 +39,12 @@ const APP_FILES = [
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
 ];
-// Large library files that never change for a given version.
+// Large library files that never change for a given version. (The WebGPU
+// engine build in vendor/ort-webgpu/ is only fetched if that engine is used.)
 const LIBRARY_FILES = [
   'vendor/transformers/transformers.min.js',
-  'vendor/ort/ort-wasm-simd-threaded.asyncify.mjs',
-  'vendor/ort/ort-wasm-simd-threaded.asyncify.wasm',
+  'vendor/ort/ort-wasm-simd-threaded.mjs',
+  'vendor/ort/ort-wasm-simd-threaded.wasm',
 ];
 
 const isModelHost = (host) => host === 'huggingface.co' || host.endsWith('.huggingface.co') || host.endsWith('.hf.co');
@@ -76,31 +79,35 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-async function fromCacheThenRefresh(request, url) {
+async function fetchAndStore(cache, url) {
+  const response = await fetch(url.href, { cache: 'no-cache' });
+  if (response.ok) await cache.put(url.origin + url.pathname, response.clone());
+  return response;
+}
+
+// Library files: the saved copy is always right, so use it without asking the network.
+async function libraryFile(request, url) {
   const cache = await caches.open(SHELL);
-  const cached = await cache.match(request, { ignoreSearch: true });
-  const isLibrary = url.pathname.includes('/vendor/');
+  return (await cache.match(request, { ignoreSearch: true })) || fetchAndStore(cache, url).catch(() => Response.error());
+}
 
-  const refresh = async () => {
-    const response = await fetch(url.href, { cache: 'no-cache' });
-    if (response.ok) await cache.put(url.origin + url.pathname, response.clone());
-    return response;
-  };
-
-  if (cached) {
-    // Answer immediately from the device; update the copy quietly for next time.
-    if (!isLibrary) refresh().catch(() => {});
-    return cached;
-  }
-  try {
-    return await refresh();
-  } catch {
-    if (request.mode === 'navigate') {
-      const page = await cache.match('index.html');
-      if (page) return page;
+// App files: ask the network first so updates arrive immediately; if there is
+// no connection (or it is too slow), use the saved copy.
+async function appFile(request, url) {
+  const cache = await caches.open(SHELL);
+  const saved = await cache.match(request, { ignoreSearch: true });
+  const fromNetwork = fetchAndStore(cache, url);
+  if (!saved) {
+    try {
+      return await fromNetwork;
+    } catch {
+      const page = request.mode === 'navigate' ? await cache.match('index.html') : null;
+      return page || Response.error();
     }
-    return Response.error();
   }
+  const tooSlow = new Promise((resolve) => setTimeout(() => resolve(null), NETWORK_WAIT_MS));
+  const fresh = await Promise.race([fromNetwork.then((response) => (response.ok ? response : null)).catch(() => null), tooSlow]);
+  return fresh || saved;
 }
 
 self.addEventListener('fetch', (event) => {
@@ -112,7 +119,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   if (url.origin === self.location.origin) {
-    event.respondWith(fromCacheThenRefresh(request, url));
+    event.respondWith(url.pathname.includes('/vendor/') ? libraryFile(request, url) : appFile(request, url));
     return;
   }
   if (url.protocol === 'https:' && isModelHost(url.hostname)) {

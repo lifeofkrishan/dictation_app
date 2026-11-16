@@ -38,9 +38,16 @@
   <main>
     <section id="setup" class="card" hidden>
       <h2>One-time setup</h2>
-      <p>This downloads the speech model to your phone (<strong id="setupSize">about 200 MB</strong>, so use Wi-Fi) and asks for the microphone.</p>
+      <p>This downloads the speech model to your phone (<strong id="setupSize">about 80 MB</strong>, so Wi-Fi is best) and asks for the microphone.</p>
       <p>After that it works with no internet. Your voice is turned into text on this phone and is never sent anywhere.</p>
       <button id="setupButton" class="primary" type="button">Download model and turn on microphone</button>
+    </section>
+
+    <section id="trouble" class="card" hidden>
+      <h2>Stopped to avoid a crash loop</h2>
+      <p>Safari closed this page more than once while the speech model was running, so nothing is being loaded automatically.</p>
+      <p>Close other tabs and apps, then try again. If it keeps happening, open Settings, tap “Copy diagnostics” and send that to whoever maintains this app.</p>
+      <button id="troubleRetry" class="primary" type="button">Try again</button>
     </section>
 
     <textarea id="text" spellcheck="true" autocapitalize="sentences" placeholder="Your words appear here. You can edit them before copying."></textarea>
@@ -55,7 +62,7 @@
   </main>
 
   <footer class="talk">
-    <button id="talk" class="talk-button" type="button" aria-label="Hold to talk">
+    <button id="talk" class="talk-button" type="button" aria-label="Tap to talk">
       <span class="talk-level" aria-hidden="true"></span>
       <span class="talk-face" aria-hidden="true">
         <svg class="glyph mic" viewBox="0 0 24 24" width="40" height="40"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -63,8 +70,8 @@
         <span class="glyph spinner"></span>
       </span>
     </button>
-    <p id="talkLabel" class="talk-label">Hold to talk</p>
-    <p id="talkHint" class="talk-hint">Hold and speak, then let go. Or tap once to keep it on.</p>
+    <p id="talkLabel" class="talk-label">Tap to talk</p>
+    <p id="talkHint" class="talk-hint">Tap once, speak, then tap again to stop.</p>
   </footer>
 
   <dialog id="settings" class="sheet">
@@ -77,8 +84,26 @@
       <section>
         <h3>Speech model</h3>
         <div id="modelChoices" class="choices"></div>
+        <label class="field">Engine
+          <select id="optEngine">
+            <option value="auto">Automatic (recommended)</option>
+            <option value="cpu">Processor (most stable)</option>
+            <option value="webgpu">Graphics chip, WebGPU (experimental)</option>
+          </select>
+        </label>
+        <p id="engineHelp" class="small-print"></p>
         <p id="engineFacts" class="small-print"></p>
         <button id="reloadModel" type="button">Reload model</button>
+      </section>
+
+      <section>
+        <h3>Button</h3>
+        <label class="field">How the big button works
+          <select id="optButton">
+            <option value="tap">Tap to start, tap again to stop</option>
+            <option value="hold">Hold to talk, let go to stop</option>
+          </select>
+        </label>
       </section>
 
       <section>
@@ -97,7 +122,7 @@
 
       <section>
         <h3>Microphone</h3>
-        <label class="check"><input id="optKeepReady" type="checkbox"> Keep the microphone ready while this app is open (starts instantly and never clips the first word; the orange dot stays on, and it switches off by itself after 3 minutes without use)</label>
+        <label class="check"><input id="optKeepReady" type="checkbox"> Keep the microphone on between dictations (starts instantly; the orange dot stays on, and it switches off by itself after 3 minutes without use)</label>
         <label class="check"><input id="optRaw" type="checkbox"> Use the raw microphone signal (turn off to let Safari apply its own noise and echo processing)</label>
         <label class="field">Capture method
           <select id="optMethod">
