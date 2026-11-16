@@ -186,6 +186,11 @@ export class Mic {
     this.chunks = [];
     this.capturedSamples = 0;
     const wantPcm = this.options.method !== 'recorder';
+    if (wantPcm && this.node && this.ctx.state !== 'running') {
+      // The browser may have paused audio; a tap is allowed to un-pause it.
+      // Give that a moment to take effect before settling for the fallback.
+      await Promise.race([this.ctx.resume().catch(() => {}), sleep(150)]);
+    }
     const pcmReady = !!this.node && this.ctx?.state === 'running';
     if (wantPcm && pcmReady) {
       this.mode = 'pcm';

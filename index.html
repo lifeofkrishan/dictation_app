@@ -97,7 +97,7 @@
 
       <section>
         <h3>Microphone</h3>
-        <label class="check"><input id="optKeepReady" type="checkbox"> Keep the microphone ready while this app is open (starts instantly and never clips the first word; the orange dot stays on)</label>
+        <label class="check"><input id="optKeepReady" type="checkbox"> Keep the microphone ready while this app is open (starts instantly and never clips the first word; the orange dot stays on, and it switches off by itself after 3 minutes without use)</label>
         <label class="check"><input id="optRaw" type="checkbox"> Use the raw microphone signal (turn off to let Safari apply its own noise and echo processing)</label>
         <label class="field">Capture method
           <select id="optMethod">
@@ -120,6 +120,12 @@
           <button id="updateApp" type="button">Update app</button>
           <button id="deleteModels" class="danger" type="button">Delete downloaded models</button>
         </div>
+      </section>
+
+      <section>
+        <h3>Accuracy test</h3>
+        <p class="small-print">Read 20 sentences and see how many words each model gets wrong on this phone.</p>
+        <a class="button-link" href="test.html">Open the accuracy test</a>
       </section>
 
       <section>

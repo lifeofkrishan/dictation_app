@@ -131,8 +131,24 @@ function startEngine() {
 // ------------------------------------------------------------------ microphone
 let levelFrame = 0;
 let pendingLevel = 0;
+// With "keep the microphone ready" on, the microphone is still switched off
+// after a while without use, so it is never left listening for hours.
+const IDLE_OFF_MS = 3 * 60 * 1000;
+let idleTimer = 0;
+function watchIdle(state) {
+  clearTimeout(idleTimer);
+  if (state === 'ready') {
+    idleTimer = setTimeout(() => {
+      if (phase === 'idle') mic.disarm();
+    }, IDLE_OFF_MS);
+  }
+}
+
 const mic = new Mic({
-  onChange: () => renderTalk(),
+  onChange: (state) => {
+    watchIdle(state);
+    renderTalk();
+  },
   onLevel: (peak) => {
     pendingLevel = Math.max(pendingLevel, peak);
     if (!levelFrame) {
@@ -315,6 +331,19 @@ async function finish(fromTap) {
     if (recording.peak < SILENCE_PEAK) throw new Quiet('No sound was picked up. Check the microphone and try again.');
     if (recording.method === 'pcm' && recording.capturedSeconds < recording.wallSeconds * 0.85) {
       run.warning = `audio dropouts: captured ${recording.capturedSeconds.toFixed(1)}s of ${recording.wallSeconds.toFixed(1)}s`;
+    }
+    // iOS can kill graphics work that starts while the app is in the
+    // background, so if you have left the app, wait until you come back.
+    if (document.hidden) {
+      run.deferred = true;
+      await new Promise((resolve) => {
+        const onShow = () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', onShow);
+          resolve();
+        };
+        document.addEventListener('visibilitychange', onShow);
+      });
     }
     if (engine.status.state === 'loading') note('Waiting for the speech model to finish loading…');
     const { text: raw, ms } = await engine.transcribe(recording.samples);
