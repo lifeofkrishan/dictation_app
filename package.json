@@ -1,0 +1,9 @@
+{
+  "name": "dictation-app",
+  "private": true,
+  "type": "module",
+  "description": "Private on-device dictation web app. No build step: the files in this folder are the app.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
