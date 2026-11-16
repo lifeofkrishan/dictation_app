@@ -103,7 +103,7 @@ async function load({ model, device: forced, encoder }) {
       // First use is slow (the graphics chip has to prepare). Do that now on
       // one second of silence so your first real dictation is fast.
       post({ type: 'stage', stage: 'warmup', device: attempt.device });
-      await transcriber(new Float32Array(16000), { max_new_tokens: 4 });
+      if (attempt.device === 'webgpu') await transcriber(new Float32Array(16000), { max_new_tokens: 4 });
       const t2 = performance.now();
       loaded = {
         model,

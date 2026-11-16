@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dictation</title>
+
+  <!-- Privacy lock: this page may only talk to itself and to huggingface.co
+       (for the one-time model download). Everything else is blocked by the browser. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; img-src 'self' data:; style-src 'self'; media-src 'self' blob:; base-uri 'none'; form-action 'none'">
+
+  <meta name="theme-color" content="#f5f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15161a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Dictate">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-phase="idle">
+  <header class="top">
+    <h1>Dictation</h1>
+    <span id="engineStatus" class="pill" data-state="idle">Not set up</span>
+    <button id="openSettings" class="icon-button" type="button" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
+  </header>
+
+  <div id="progress" class="progress" hidden>
+    <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
+    <p id="progressText" class="progress-text"></p>
+  </div>
+
+  <main>
+    <section id="setup" class="card" hidden>
+      <h2>One-time setup</h2>
+      <p>This downloads the speech model to your phone (<strong id="setupSize">about 200 MB</strong>, so use Wi-Fi) and asks for the microphone.</p>
+      <p>After that it works with no internet. Your voice is turned into text on this phone and is never sent anywhere.</p>
+      <button id="setupButton" class="primary" type="button">Download model and turn on microphone</button>
+    </section>
+
+    <textarea id="text" spellcheck="true" autocapitalize="sentences" placeholder="Your words appear here. You can edit them before copying."></textarea>
+
+    <div class="actions">
+      <button id="copy" class="primary" type="button">Copy</button>
+      <button id="share" type="button" hidden>Share</button>
+      <button id="clear" type="button">Clear</button>
+      <label class="check inline"><input id="append" type="checkbox"> Add to text</label>
+    </div>
+    <p id="note" class="note" role="status" aria-live="polite"></p>
+  </main>
+
+  <footer class="talk">
+    <button id="talk" class="talk-button" type="button" aria-label="Hold to talk">
+      <span class="talk-level" aria-hidden="true"></span>
+      <span class="talk-face" aria-hidden="true">
+        <svg class="glyph mic" viewBox="0 0 24 24" width="40" height="40"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <svg class="glyph stop" viewBox="0 0 24 24" width="40" height="40"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5" fill="currentColor"/></svg>
+        <span class="glyph spinner"></span>
+      </span>
+    </button>
+    <p id="talkLabel" class="talk-label">Hold to talk</p>
+    <p id="talkHint" class="talk-hint">Hold and speak, then let go. Or tap once to keep it on.</p>
+  </footer>
+
+  <dialog id="settings" class="sheet">
+    <form method="dialog" class="sheet-head">
+      <h2>Settings</h2>
+      <button class="primary small" value="close">Done</button>
+    </form>
+    <div class="sheet-body">
+
+      <section>
+        <h3>Speech model</h3>
+        <div id="modelChoices" class="choices"></div>
+        <p id="engineFacts" class="small-print"></p>
+        <button id="reloadModel" type="button">Reload model</button>
+      </section>
+
+      <section>
+        <h3>Personal dictionary</h3>
+        <p class="small-print">One entry per line. Write a name the way it should be spelled, or use <code>heard = written</code> when the app keeps getting a word wrong.</p>
+        <textarea id="dictionary" class="dictionary" rows="6" spellcheck="false" autocapitalize="off" autocorrect="off" placeholder="GitHub&#10;Siobhan&#10;cube control = kubectl"></textarea>
+        <p id="dictionaryStatus" class="small-print"></p>
+      </section>
+
+      <section>
+        <h3>Clean-up rules</h3>
+        <label class="check"><input id="optCommands" type="checkbox"> Spoken commands: “new line”, “new paragraph”, “bullet point”, “scratch that”</label>
+        <label class="check"><input id="optFillers" type="checkbox"> Remove “um”, “uh”, “er”, “hmm”</label>
+        <label class="check"><input id="optRepeats" type="checkbox"> Remove repeated short words (“the the”)</label>
+      </section>
+
+      <section>
+        <h3>Microphone</h3>
+        <label class="check"><input id="optKeepReady" type="checkbox"> Keep the microphone ready while this app is open (starts instantly and never clips the first word; the orange dot stays on)</label>
+        <label class="check"><input id="optRaw" type="checkbox"> Use the raw microphone signal (turn off to let Safari apply its own noise and echo processing)</label>
+        <label class="field">Capture method
+          <select id="optMethod">
+            <option value="auto">Automatic</option>
+            <option value="pcm">Direct (raw samples)</option>
+            <option value="recorder">Compatibility (recorded clip)</option>
+          </select>
+        </label>
+        <button id="playLast" type="button">Play back my last recording</button>
+      </section>
+
+      <section>
+        <h3>Troubleshooting</h3>
+        <div class="row">
+          <button id="copyDiagnostics" type="button">Copy diagnostics</button>
+          <button id="refreshDiagnostics" type="button">Refresh</button>
+        </div>
+        <pre id="diagnostics" class="diagnostics"></pre>
+        <div class="row">
+          <button id="updateApp" type="button">Update app</button>
+          <button id="deleteModels" class="danger" type="button">Delete downloaded models</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Privacy</h3>
+        <p class="small-print">Recording and transcription happen on this device. The only internet use is downloading the app and, once, the speech model from huggingface.co. To check for yourself, switch on Airplane Mode: dictation keeps working.</p>
+        <p class="small-print">Version <span id="version"></span></p>
+      </section>
+    </div>
+  </dialog>
+
+  <script src="js/version.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

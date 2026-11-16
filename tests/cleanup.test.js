@@ -90,7 +90,7 @@ cases('non-speech tags', [
 ]);
 
 cases('personal dictionary', [
-  ['i spoke to krishan about git hub', 'I spoke to Krishan about GitHub', 'Krishan\nGitHub'],
+  ['i spoke to siobhan about git hub', 'I spoke to Siobhan about GitHub', 'Siobhan\nGitHub'],
   ['Run cube control get pods.', 'Run kubectl get pods.', 'cube control = kubectl'],
   ['Cube-control is fine. cube   control too.', 'kubectl is fine. kubectl too.', 'cube control = kubectl'],
   ['kubectl is installed. New line. iphone works.', 'kubectl is installed.\niPhone works.', 'kubectl\niPhone'],

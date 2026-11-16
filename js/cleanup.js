@@ -137,7 +137,7 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * Read the personal dictionary the user typed, one entry per line:
  *
- *   Krishan                     <- "always spell it like this" (fixes capitals / spacing)
+ *   Siobhan                     <- "always spell it like this" (fixes capitals / spacing)
  *   cube control = kubectl      <- "when you hear the left side, write the right side"
  *
  * Lines starting with # are notes and are ignored.
